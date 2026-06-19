@@ -3,3 +3,4 @@ datasets
 sentencepiece
 numpy
 tqdm
+sacrebleu

@@ -1,5 +1,3 @@
-#cos moze byc nie tak
-
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -8,6 +6,14 @@ from tqdm import tqdm
 from datasets import load_dataset
 
 from config import *
+
+from metrics.bleu import evaluate_bleu
+from data_utils.tokenizer import Tokenizer
+
+from metrics.validation import validate
+from metrics.perplexity import perplexity
+
+from inference.translator import translate
 
 from data_utils.dataset import TranslationDataset
 from data_utils.collate import collate_fn
@@ -34,6 +40,16 @@ loader = DataLoader(
     collate_fn=collate_fn
 )
 
+valid_split = dataset["validation"]
+
+valid_data = TranslationDataset(valid_split)
+
+valid_loader = DataLoader(
+    valid_data,
+    batch_size=BATCH_SIZE,
+    collate_fn=collate_fn
+)
+
 model = TransformerTranslator(
 
     src_vocab=VOCAB_SIZE,
@@ -46,6 +62,9 @@ model = TransformerTranslator(
     max_len=MAX_LEN
 
 ).to(device)
+
+tokenizer = Tokenizer()
+tokenizer.load(TOKENIZER_PATH)
 
 criterion = nn.CrossEntropyLoss(
     ignore_index=PAD_ID
@@ -83,7 +102,7 @@ for epoch in range(start_epoch, EPOCHS):
 
     total_loss = 0
 
-    for src, tgt in loop:
+    for step, (src, tgt) in enumerate(loop):
 
         src = src.to(device)
         tgt = tgt.to(device)
@@ -111,19 +130,75 @@ for epoch in range(start_epoch, EPOCHS):
         loss.backward()
         optimizer.step()
 
-        if loop.n % 200 == 0:
-            print(f"\n💓 Batch {loop.n} alive | loss: {loss.item():.4f}")
-
         total_loss += loss.item()
+
+        if step % 200 == 0:
+            print(f"\n[Epoch {epoch} | Step {step}] loss = {loss.item():.4f}")
+
+        loop.set_postfix(loss=f"{loss.item():.4f}")
 
         #loop.set_postfix(loss=loss.item())
         loop.set_postfix(
             loss=f"{loss.item():.4f}"
         )
 
-    print(
-        f"Epoch {epoch} | loss: {total_loss:.4f}"
+    avg_train_loss = total_loss / len(loader)
+
+    val_loss, val_acc = validate(
+        model,
+        valid_loader,
+        criterion,
+        device
     )
+
+    bleu = evaluate_bleu(
+        model,
+        tokenizer,
+        dataset["validation"],
+        device,
+        num_examples=100
+    )
+
+    print("=" * 40)
+
+    print(f"Epoch {epoch}")
+
+    print(f"Train loss      : {avg_train_loss:.4f}")
+
+    print(f"Validation loss : {val_loss:.4f}")
+
+    print(f"Accuracy        : {val_acc * 100:.2f}%")
+
+    print(f"Perplexity      : {perplexity(val_loss):.2f}")
+
+    print(f"BLEU            : {bleu:.2f}")
+
+    sample = dataset["validation"][0]
+
+    pl = sample["translation"]["pl"]
+
+    gt = sample["translation"]["en"]
+
+    pred = translate(
+        model,
+        tokenizer,
+        pl,
+        device
+    )
+
+    print()
+
+    print("Example")
+
+    print("PL    :", pl)
+
+    print("GT    :", gt)
+
+    print("MODEL :", pred)
+
+    print()
+
+    print("=" * 40)
 
 
     torch.save(

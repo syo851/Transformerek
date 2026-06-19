@@ -33,7 +33,7 @@ BATCH_SIZE = 64
 
 LEARNING_RATE = 1e-4
 
-EPOCHS = 5
+EPOCHS = 6
 
 
 # ==========================================
@@ -54,5 +54,7 @@ TOKENIZER_MODEL = "data/pl_en.model"
 TOKENIZER_VOCAB = "data/pl_en.vocab"
 
 TOKENIZER_TEXT = "data/train_text.txt"
+
+TOKENIZER_PATH = "data/pl_en.model"
 
 CHECKPOINT = "checkpoints/translator.pt"
